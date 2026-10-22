@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Jarral Forms
  * Description:       Contact form with nonce protection, honeypot, timing trap, rate limiting and full sanitisation. Stores every enquiry and emails you.
- * Version:     1.4.2
+ * Version:     1.4.3
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Update URI:        https://github.com/Jarral05/jarral-forms
@@ -30,7 +30,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'JDF_VERSION', '1.4.2' );
+define( 'JDF_VERSION', '1.4.3' );
 
 /* =========================================================================
    0. CONFIGURATION
@@ -924,6 +924,14 @@ add_action( 'manage_jd_enquiry_posts_custom_column', 'jdf_column_content', 10, 2
  *            which page it came from. Use the exact name from the estimator.
  *   style    "light" (default) or "dark" for the pine band treatment.
  *   id       Anchor id, default "contact", so buttons can link to #contact.
+ *   promises Pipe-separated "Bold line :: plain sentence" pairs, shown as a
+ *            list beside the form. Needs a heading.
+ *   meta     A sentence under the promises. Only <a href> and <br> survive.
+ *            Needs a heading.
+ *
+ * With promises or meta and a heading, the copy sits in a column beside the
+ * form, using the theme's homepage .contact-cols markup. Without either, the
+ * output is exactly what it was before these two attributes existed.
  *
  * @param array|string $atts Shortcode attributes.
  * @return string
@@ -935,11 +943,13 @@ function jdf_form_shortcode( $atts = array() ) {
 
 	$a = shortcode_atts(
 		array(
-			'heading' => '',
-			'intro'   => '',
-			'service' => '',
-			'style'   => 'light',
-			'id'      => 'contact',
+			'heading'  => '',
+			'intro'    => '',
+			'service'  => '',
+			'style'    => 'light',
+			'id'       => 'contact',
+			'promises' => '',
+			'meta'     => '',
 		),
 		$atts,
 		'jarral_contact_form'
@@ -962,6 +972,23 @@ function jdf_form_shortcode( $atts = array() ) {
 	$out  = '<section class="band jdf-block' . ( $dark ? ' band-dark' : '' ) . '" id="' .
 		esc_attr( sanitize_title( $a['id'] ) ) . '">';
 	$out .= '<div class="wrap">';
+
+	$copy = jdf_contact_copy( $a['promises'], $a['meta'] );
+
+	if ( '' !== $copy && '' !== trim( $a['heading'] ) ) {
+		// Copy beside the form: the same markup the theme styles on the homepage.
+		$out .= '<div class="contact-cols"><div class="contact-copy">';
+		$out .= '<h2>' . esc_html( $a['heading'] ) . '</h2>';
+
+		if ( '' !== trim( $a['intro'] ) ) {
+			$out .= '<p class="lede">' . esc_html( $a['intro'] ) . '</p>';
+		}
+
+		$out .= $copy . '</div><div>' . $form . '</div></div></div></section>';
+
+		return $out;
+	}
+
 	$out .= '<div class="jdf-block-head">';
 
 	if ( '' !== trim( $a['heading'] ) ) {
@@ -976,6 +1003,47 @@ function jdf_form_shortcode( $atts = array() ) {
 	return $out;
 }
 add_shortcode( 'jarral_contact_form', 'jdf_form_shortcode' );
+
+/**
+ * The promise list and meta line for the two-column shortcode layout.
+ *
+ * Promise text is escaped outright; the plugin writes the only tags it needs.
+ * The meta line goes through wp_kses with an allowlist of two tags, so an
+ * email link and a line break survive and nothing else does.
+ *
+ * @param string $promises Pipe-separated "Bold line :: plain sentence" pairs.
+ * @param string $meta     A sentence under the promises.
+ * @return string Markup, or '' when both are empty.
+ */
+function jdf_contact_copy( $promises, $meta ) {
+	$items = '';
+
+	foreach ( explode( '|', (string) $promises ) as $pair ) {
+		$parts = array_map( 'trim', explode( '::', $pair, 2 ) );
+		if ( '' === $parts[0] ) {
+			continue;
+		}
+		$items .= '<li><strong>' . esc_html( $parts[0] ) . '</strong>';
+		if ( isset( $parts[1] ) && '' !== $parts[1] ) {
+			$items .= ' ' . esc_html( $parts[1] );
+		}
+		$items .= '</li>';
+	}
+
+	$out = '' !== $items ? '<ul class="promise">' . $items . '</ul>' : '';
+
+	if ( '' !== trim( (string) $meta ) ) {
+		$out .= '<p class="contact-meta">' . wp_kses(
+			$meta,
+			array(
+				'a'  => array( 'href' => array() ),
+				'br' => array(),
+			)
+		) . '</p>';
+	}
+
+	return $out;
+}
 
 /* =========================================================================
    5. UPDATES

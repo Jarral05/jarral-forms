@@ -3,6 +3,21 @@
 All notable changes to this project.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [SemVer](https://semver.org/).
 
+## [1.4.3] - 2026-10-23
+
+### Added
+- **Two-column layout for `[jarral_contact_form]`.** Two new attributes:
+  `promises`, pipe-separated "Bold line :: plain sentence" pairs rendered as
+  `ul.promise`, and `meta`, a line under them. With either one and a heading,
+  the copy sits beside the form in the theme's `.contact-cols` markup. Without
+  them the output is byte-for-byte what it was, so existing pages, including
+  the six service pages, are unchanged. Promise text is escaped with
+  `esc_html`; `meta` goes through `wp_kses`, allowing only `<a href>` and
+  `<br>`.
+- Needs Jarral Digital 1.6.3 or later for the styling, and `style="dark"`:
+  the copy colours are written for the pine band, and on a light band the
+  promise titles render at 1:1 contrast.
+
 ## [1.4.2] - 2026-10-23
 
 ### Fixed
