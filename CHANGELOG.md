@@ -3,6 +3,22 @@
 All notable changes to this project.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [SemVer](https://semver.org/).
 
+## [1.4.1] - 2026-10-22
+
+### Fixed
+- The comment above `enableReleaseAssets()` claimed it restricted updates to
+  tagged releases. It did not — `GitHubApi::getUpdateDetectionStrategies()`
+  appends the branch strategy unconditionally, so the checker fell back to
+  whatever sat on `main` when no release or tag existed. A
+  `puc_vcs_update_detection_strategies-jarral-forms` filter now removes that
+  fallback, making the claim true instead of merely written down.
+- `getVcsApi()` is called once and null-checked before `method_exists()`,
+  which raises a deprecation on PHP 8.1+ when passed null.
+
+### Added
+- The release workflow runs `php -l` over every PHP file before building the
+  zip, so a syntax error fails the release instead of reaching a live site.
+
 ## [1.4.0] - 2026-10-22
 
 ### Added

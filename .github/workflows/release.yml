@@ -18,6 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check PHP syntax
+        run: |
+          find . -name '*.php' -not -path './build/*' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
       - name: Work out the slug and version
         id: meta
         run: |
