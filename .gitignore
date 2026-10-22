@@ -1,5 +1,7 @@
 node_modules/
-vendor/
+# Top-level vendor/ only. The update checker's own
+# lib/plugin-update-checker/vendor/ must ship, or update checks crash.
+/vendor/
 .DS_Store
 *.log
 *.zip

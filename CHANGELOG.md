@@ -3,6 +3,18 @@
 All notable changes to this project.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [SemVer](https://semver.org/).
 
+## [1.4.2] - 2026-10-23
+
+### Fixed
+- **Update checks crashed on every site running a release build.**
+  `.gitignore` had `vendor/`, which also matched the update library's own
+  `lib/plugin-update-checker/vendor/`, so Parsedown and the readme parser never
+  reached a release zip. The check needs both, hit `Class "Parsedown" not
+  found`, and stopped before recording any update. The rule is now `/vendor/`,
+  top level only. Confirmed on the live site: `vendor/Parsedown.php` returned
+  404. Sites on 1.4.1 or earlier cannot detect this release, so upload the
+  1.4.2 zip once by hand; updates work normally after that.
+
 ## [1.4.1] - 2026-10-22
 
 ### Fixed

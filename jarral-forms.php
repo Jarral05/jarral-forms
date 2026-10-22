@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Jarral Forms
  * Description:       Contact form with nonce protection, honeypot, timing trap, rate limiting and full sanitisation. Stores every enquiry and emails you.
- * Version:     1.4.1
+ * Version:     1.4.2
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Update URI:        https://github.com/Jarral05/jarral-forms
@@ -30,7 +30,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'JDF_VERSION', '1.4.1' );
+define( 'JDF_VERSION', '1.4.2' );
 
 /* =========================================================================
    0. CONFIGURATION
