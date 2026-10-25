@@ -3,6 +3,37 @@
 All notable changes to this project.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [SemVer](https://semver.org/).
 
+## [1.4.4] - 2026-10-25
+
+### Fixed
+- **The form was not safe on cached pages.** LiteSpeed Cache keeps guest
+  pages for a week by default, and the form sits on nine pages (home,
+  contact, services and the six service pages). Three faults followed:
+  - The cached nonce expired after 12 to 24 hours, so every enquiry from an
+    older copy failed with "Your session expired".
+  - After sending, the visitor returned to the same URL and got the cached
+    page, without the thank-you or error message.
+  - On a cache miss, LiteSpeed could store that message, including the
+    visitor's typed name, email and message, and show it to everyone.
+
+  The fixes:
+  - Pages with the form now ask LiteSpeed for an 8-hour cache at most
+    (`litespeed_control_set_ttl`, logged-out visitors only).
+  - The visitor now returns to `?jdf=sent` or `?jdf=check`, which is never
+    cached: `litespeed_control_set_nocache`, `DONOTCACHEPAGE` and
+    `nocache_headers()`.
+  - The saved result is shown only on that return visit. Both hooks do
+    nothing without LiteSpeed Cache.
+- The release workflow no longer generates release notes, matching the theme.
+  `CHANGELOG.md` is the record.
+
+### Changed
+- The only visible change is the address after sending: `/contact/?jdf=sent#contact`
+  instead of `/contact/#contact`. Message text and design are unchanged.
+- Known limit: on a cached page the timing trap's start time is the cache
+  time, so it only catches bots on uncached copies. The nonce, honeypot and
+  rate limit are unaffected.
+
 ## [1.4.3] - 2026-10-23
 
 ### Added

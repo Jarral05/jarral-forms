@@ -41,4 +41,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.meta.outputs.slug }}.zip
-          generate_release_notes: true
+          # No release notes. The update check formats notes with Parsedown,
+          # and copies installed from 1.4.1 or earlier shipped without it, so
+          # a release with notes crashes their check. CHANGELOG.md is the
+          # record instead, as in the theme.
+          generate_release_notes: false

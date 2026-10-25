@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Jarral Forms
  * Description:       Contact form with nonce protection, honeypot, timing trap, rate limiting and full sanitisation. Stores every enquiry and emails you.
- * Version:     1.4.3
+ * Version:     1.4.4
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Update URI:        https://github.com/Jarral05/jarral-forms
@@ -30,7 +30,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'JDF_VERSION', '1.4.3' );
+define( 'JDF_VERSION', '1.4.4' );
 
 /* =========================================================================
    0. CONFIGURATION
@@ -129,6 +129,38 @@ function jdf_visitor_key() {
    ========================================================================= */
 
 /**
+ * Keep the visit back after a submission out of every page cache. It shows
+ * this visitor's own message and typed values, and a cached copy would
+ * either hide the result from them or show it to everyone else.
+ *
+ * The LiteSpeed Cache hooks do nothing when that plugin is not active.
+ */
+function jdf_cache_control() {
+	if ( ! isset( $_GET['jdf'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- only decides cacheability.
+		return;
+	}
+	do_action( 'litespeed_control_set_nocache', 'jarral-forms: submission result' );
+	if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+		define( 'DONOTCACHEPAGE', true ); // The convention other cache plugins read.
+	}
+	nocache_headers();
+}
+add_action( 'template_redirect', 'jdf_cache_control' );
+
+/**
+ * Where to send the visitor after a submission. The jdf query arg gives
+ * that visit its own URL, so a cached copy of the page cannot answer it
+ * instead of PHP (see jdf_cache_control()).
+ *
+ * @param string $back   Page the form was sent from.
+ * @param string $result 'sent' or 'check'.
+ * @return string
+ */
+function jdf_return_url( $back, $result ) {
+	return add_query_arg( 'jdf', $result, remove_query_arg( 'jdf', $back ) ) . '#contact';
+}
+
+/**
  * Output the contact form. Called from the theme and from the shortcode.
  *
  * @param array $args {
@@ -151,9 +183,21 @@ function jd_render_contact_form( $args = array() ) {
 		)
 	);
 
+	// WordPress accepts a nonce for 12 to 24 hours after it is made, so a
+	// cached copy of this page must expire sooner or the form stops working.
+	// Eight hours leaves a margin for a visitor who replies later.
+	if ( ! is_user_logged_in() ) {
+		do_action( 'litespeed_control_set_ttl', 8 * HOUR_IN_SECONDS, 'jarral-forms: nonce lifetime' );
+	}
+
+	// Only the uncached visit back after a submission shows its result, so
+	// no other page can be cached with this visitor's message in it.
 	$key   = 'jdf_state_' . jdf_visitor_key();
-	$state = get_transient( $key );
-	delete_transient( $key );
+	$state = false;
+	if ( isset( $_GET['jdf'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- the result was saved server-side, nothing is read from the URL.
+		$state = get_transient( $key );
+		delete_transient( $key );
+	}
 
 	if ( is_array( $state ) && isset( $state['status'] ) && 'ok' === $state['status'] ) {
 		echo '<div class="jdf-note jdf-note-ok" role="status">' .
@@ -342,7 +386,7 @@ function jdf_handle_submit() {
 	if ( ! empty( $_POST['jdf_website'] ) ) {
 		// Silently pretend it worked. Telling a bot it failed just makes it retry.
 		set_transient( $key, array( 'status' => 'ok' ), 60 );
-		wp_safe_redirect( $back . '#contact' );
+		wp_safe_redirect( jdf_return_url( $back, 'sent' ) );
 		exit;
 	}
 
@@ -350,7 +394,7 @@ function jdf_handle_submit() {
 	$started = isset( $_POST['jdf_time'] ) ? absint( $_POST['jdf_time'] ) : 0;
 	if ( $started > 0 && ( time() - $started ) < 3 ) {
 		set_transient( $key, array( 'status' => 'ok' ), 60 );
-		wp_safe_redirect( $back . '#contact' );
+		wp_safe_redirect( jdf_return_url( $back, 'sent' ) );
 		exit;
 	}
 
@@ -456,7 +500,7 @@ function jdf_handle_submit() {
 	jdf_notify_client( $meta );
 
 	set_transient( $key, array( 'status' => 'ok' ), 60 );
-	wp_safe_redirect( $back . '#contact' );
+	wp_safe_redirect( jdf_return_url( $back, 'sent' ) );
 	exit;
 }
 add_action( 'admin_post_nopriv_jdf_submit', 'jdf_handle_submit' ); // Logged-out visitors.
@@ -480,7 +524,7 @@ function jdf_bounce( $key, $errors, $old, $back ) {
 		),
 		120
 	);
-	wp_safe_redirect( $back . '#contact' );
+	wp_safe_redirect( jdf_return_url( $back, 'check' ) );
 	exit;
 }
 
