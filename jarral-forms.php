@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Jarral Forms
  * Description:       Contact form with nonce protection, honeypot, timing trap, rate limiting and full sanitisation. Stores every enquiry and emails you.
- * Version:     1.4.4
+ * Version:     1.4.5
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Update URI:        https://github.com/Jarral05/jarral-forms
@@ -30,7 +30,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'JDF_VERSION', '1.4.4' );
+define( 'JDF_VERSION', '1.4.5' );
 
 /* =========================================================================
    0. CONFIGURATION
@@ -122,6 +122,31 @@ function jdf_timings() {
 function jdf_visitor_key() {
 	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
 	return substr( hash( 'sha256', $ip . wp_salt() ), 0, 24 );
+}
+
+/**
+ * Keep an estimator value only if it looks like one the site produced.
+ *
+ * These arrive as URL parameters and hidden fields, so a stranger can put
+ * anything in them, and the service and range are repeated in the email sent
+ * to whatever address the visitor typed. Letters only for the service and a
+ * strict "$600 - $2500" shape for the range leave no room for a link or a
+ * phone number. A value that fails is dropped, not rejected, so the enquiry
+ * still arrives.
+ *
+ * @param string $service Service name.
+ * @param string $range   Price range.
+ * @param string $extras  Comma-separated extras.
+ * @return string[] Service, range and extras.
+ */
+function jdf_clean_estimate( $service, $range, $extras ) {
+	$service = preg_match( '/^[\p{L} ,&()\-]{1,80}$/u', $service ) ? $service : '';
+	$range   = preg_match( '/^\$\d{1,7} - \$\d{1,7}$/', $range ) ? $range : '';
+	$extras  = preg_match( '/^[\p{L}\d ,\-]{1,200}$/u', $extras ) ? $extras : '';
+	if ( '' === $service ) {
+		return array( '', '', '' );
+	}
+	return array( $service, $range, $extras );
 }
 
 /* =========================================================================
@@ -221,6 +246,9 @@ function jd_render_contact_form( $args = array() ) {
 	if ( '' === $pre_service && '' !== $args['service'] ) {
 		$pre_service = sanitize_text_field( $args['service'] );
 	}
+
+	// A crafted link must not put its own words in the "Your estimate" panel.
+	list( $pre_service, $pre_range, $pre_extras ) = jdf_clean_estimate( $pre_service, $pre_range, $pre_extras );
 
 	// Which page this form sits on. Written as a hidden field rather than read
 	// from the referrer on submit, because admin-post.php is the referrer by
@@ -420,6 +448,13 @@ function jdf_handle_submit() {
 	$est_extras  = isset( $_POST['jdf_est_extras'] ) ? sanitize_text_field( wp_unslash( $_POST['jdf_est_extras'] ) ) : '';
 	$source      = isset( $_POST['jdf_source'] ) ? sanitize_text_field( wp_unslash( $_POST['jdf_source'] ) ) : '';
 
+	list( $est_service, $est_range, $est_extras ) = jdf_clean_estimate( $est_service, $est_range, $est_extras );
+
+	// Fields without their own check below are capped, so nobody can store
+	// or mail an essay through a one-line field.
+	$company = mb_substr( $company, 0, 120 );
+	$source  = mb_substr( $source, 0, 200 );
+
 	$old = compact( 'name', 'email', 'company', 'message', 'budget', 'timing' );
 
 	// --- Validate. -------------------------------------------------------
@@ -589,9 +624,13 @@ function jdf_notify( $m ) {
 	$lines[] = '';
 	$lines[] = $m['_jdf_message'];
 
+	// wp_mail() splits Reply-To on commas, so a comma in the name could add
+	// a second address to your reply.
+	$reply_name = trim( str_replace( array( ',', ';', '"', '<', '>' ), ' ', $m['_jdf_name'] ) );
+
 	$headers = array(
 		'From: ' . get_bloginfo( 'name' ) . ' <' . JDF_FROM_EMAIL . '>',
-		'Reply-To: ' . $m['_jdf_name'] . ' <' . $m['_jdf_email'] . '>',
+		'Reply-To: ' . $reply_name . ' <' . $m['_jdf_email'] . '>',
 		'Content-Type: text/plain; charset=UTF-8',
 	);
 
@@ -607,8 +646,10 @@ function jdf_notify( $m ) {
    Deliberately, the client's copy does NOT repeat their free-text message
    back to them. The form accepts any email address a visitor types, so
    anything echoed into this email is something a stranger could aim at
-   somebody else's inbox. The structured fields come from your own dropdowns
-   and estimator, so they are safe to include; a free paragraph is not.
+   somebody else's inbox. Only values that pass a strict check are repeated:
+   a plain first name, and a service and price range in the shape the
+   estimator produces (jdf_clean_estimate()). The extras list stays out,
+   because its labels may contain digits.
    ========================================================================= */
 
 /**
@@ -736,8 +777,9 @@ function jdf_notify_client( $m ) {
 	$soft  = '#4A524C';
 
 	// First name only. "Hello Jane Whitfield" reads like a database wrote it.
+	// Only a plain name is repeated, never text someone could aim at a stranger.
 	$first = trim( (string) strtok( (string) $m['_jdf_name'], ' ' ) );
-	$first = $first ? $first : 'there';
+	$first = preg_match( "/^\p{L}[\p{L}'\-]{0,29}$/u", $first ) ? $first : 'there';
 
 	$window = JDF_REPLY_WINDOW;
 
@@ -770,11 +812,6 @@ function jdf_notify_client( $m ) {
 			$b .= '<p style="margin:8px 0 0;font-size:13px;color:#3C6B5C;">'
 				. 'An estimate from the website calculator, not a quote. Your real price comes in my reply and does not change after you accept it.'
 				. '</p>';
-		}
-
-		if ( ! empty( $m['_jdf_est_extras'] ) ) {
-			$b .= '<p style="margin:8px 0 0;font-size:13px;color:#3C6B5C;">Including: '
-				. esc_html( $m['_jdf_est_extras'] ) . '</p>';
 		}
 
 		$b .= '</td></tr></table>';

@@ -3,6 +3,35 @@
 All notable changes to this project.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [SemVer](https://semver.org/).
 
+## [1.4.5] - 2026-10-26
+
+### Fixed
+- **The confirmation email could carry a stranger's text to any inbox.**
+  The form emails whatever address is typed, and that email repeated the
+  estimator fields and the first name. The estimator fields are hidden
+  inputs and URL parameters, so anyone could fill them with "your invoice
+  is overdue, call…" or a link, and send it from your domain.
+  - Estimator values are kept only in the shape the site produces
+    (`jdf_clean_estimate()`): a service name made of letters (commas, "&",
+    hyphens and brackets allowed), a "$600 - $2500" range, and extras
+    without links. A value that fails is dropped and the enquiry still
+    arrives.
+  - The same check applies to the "Your estimate" panel, so a crafted link
+    can't put words on your page.
+  - The greeting uses the first name only if it is a plain name (letters,
+    apostrophe, hyphen, up to 30 characters), otherwise "Thanks, there".
+- Commas and angle brackets are removed from the name in the Reply-To
+  header of your own notification. `wp_mail()` splits that header on
+  commas, so a crafted name could add a second address to your reply.
+- Company is capped at 120 characters and "Sent from" at 200.
+
+### Changed
+- The client confirmation no longer lists the chosen extras ("Including:
+  …"). Extras are free-form labels that may contain digits. They still
+  appear in your notification email and in the Enquiries screen.
+- Tested on the QA install with theme 1.8.4: 29 hardening checks (1.4.4
+  fails 16). The form cache test (16) still passes.
+
 ## [1.4.4] - 2026-10-25
 
 ### Fixed
